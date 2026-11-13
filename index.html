@@ -10,13 +10,13 @@
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         background-color: #f4f6f9;
         margin: 0;
-        padding: 20px;
+        padding: 20px 20px 120px 20px; /* Ruang ekstra di bawah untuk layer penilaian */
       }
 
       /* Navigasi Mode & Skor */
       .header-kontrol {
         max-width: 820px;
-        margin: 0 auto 15px auto;
+        margin: 0 auto 20px auto;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -50,6 +50,12 @@
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       }
 
+      .kanan-kontrol {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
       .badge-skor {
         background: #ffffff;
         padding: 8px 16px;
@@ -61,52 +67,13 @@
         border: 1px solid #dee2e6;
       }
 
-      /* Panel Status Pelafalan */
-      .panel-status {
-        max-width: 820px;
-        margin: 0 auto 20px auto;
-        padding: 15px 20px;
-        background-color: #ffffff;
-        border-left: 5px solid #333333;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 12px;
-      }
-
-      .status-teks {
-        font-size: 15px;
-        color: #333;
-        flex: 1;
-        min-width: 240px;
-        line-height: 1.5;
-      }
-
-      .status-sukses {
-        border-left-color: #28a745;
-        background-color: #eafaf1;
-      }
-
-      .status-gagal {
-        border-left-color: #dc3545;
-        background-color: #fdf2f2;
-      }
-
-      .status-mendengarkan {
-        border-left-color: #007bff;
-        background-color: #eef6ff;
-      }
-
       .btn-izin {
-        padding: 9px 16px;
+        padding: 8px 14px;
         background-color: #007bff;
         color: #ffffff;
         border: none;
-        border-radius: 6px;
-        font-size: 14px;
+        border-radius: 8px;
+        font-size: 13px;
         font-weight: 600;
         cursor: pointer;
         transition: background-color 0.2s;
@@ -117,6 +84,76 @@
         background-color: #0056b3;
       }
 
+      /* =======================================================
+         LAYER BARU (FLOATING OVERLAY) UNTUK PENILAIAN PELAFALAN
+         Menggunakan position: fixed agar tidak menggeser tombol
+         ======================================================= */
+      .layer-penilaian {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(150%);
+        width: 90%;
+        max-width: 560px;
+        padding: 16px 20px;
+        background-color: #ffffff;
+        border-left: 6px solid #333333;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        z-index: 9999;
+        opacity: 0;
+        pointer-events: none;
+        transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
+      }
+
+      .layer-penilaian.tampil {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .status-teks {
+        font-size: 15px;
+        color: #222;
+        flex: 1;
+        line-height: 1.45;
+      }
+
+      .btn-tutup-layer {
+        background: transparent;
+        border: none;
+        font-size: 18px;
+        color: #666;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        line-height: 1;
+      }
+
+      .btn-tutup-layer:hover {
+        background: rgba(0,0,0,0.06);
+        color: #000;
+      }
+
+      .layer-penilaian.status-sukses {
+        border-left-color: #28a745;
+        background-color: #eafaf1;
+      }
+
+      .layer-penilaian.status-gagal {
+        border-left-color: #dc3545;
+        background-color: #fdf2f2;
+      }
+
+      .layer-penilaian.status-mendengarkan {
+        border-left-color: #007bff;
+        background-color: #eef6ff;
+      }
+
       /* Area Latihan Bebas (Grid Kartu) */
       .container-tombol {
         display: flex;
@@ -125,7 +162,7 @@
         gap: 18px;
         max-width: 850px;
         margin: 0 auto;
-        padding: 10px 0 60px 0;
+        padding: 5px 0;
       }
 
       .kartu-angka {
@@ -223,7 +260,7 @@
       .container-kuis {
         display: none;
         max-width: 500px;
-        margin: 10px auto 60px auto;
+        margin: 10px auto 0 auto;
         background: #ffffff;
         padding: 30px 25px;
         border-radius: 16px;
@@ -364,28 +401,23 @@
   </head>
   <body>
 
-    <!-- Bar Navigasi Mode & Skor -->
+    <!-- Bar Navigasi Mode, Izin Mikrofon & Skor -->
     <div class="header-kontrol">
       <div class="grup-mode">
         <button id="tabBebas" class="btn-mode aktif" onclick="gantiMode('bebas')">📖 Latihan Bebas</button>
         <button id="tabKuis" class="btn-mode" onclick="gantiMode('kuis')">🎲 Mode Kuis Acak</button>
       </div>
-      <div class="badge-skor" id="tampilanSkor">
-        Skor Tepat: <span id="skorBenar">0</span> / <span id="totalPercobaan">0</span>
+      <div class="kanan-kontrol">
+        <button id="btnIzinMic" class="btn-izin" onclick="mintaIzinMikrofon()">
+          🔓 Aktifkan Mikrofon
+        </button>
+        <div class="badge-skor" id="tampilanSkor">
+          Skor Tepat: <span id="skorBenar">0</span> / <span id="totalPercobaan">0</span>
+        </div>
       </div>
     </div>
 
-    <!-- Panel Hasil Pengecekan Suara & Izin Mikrofon -->
-    <div id="panelStatus" class="panel-status">
-      <div id="statusTeks" class="status-teks">
-        Klik karakter untuk mendengar contoh, lalu <strong>tekan & tahan 🎤 Tahan</strong> sambil berbicara.
-      </div>
-      <button id="btnIzinMic" class="btn-izin" onclick="mintaIzinMikrofon()">
-        🔓 Aktifkan Mikrofon
-      </button>
-    </div>
-
-    <!-- Mode 1: Container Tombol Latihan Bebas -->
+    <!-- Mode 1: Container Tombol Latihan Bebas (Posisi Statis) -->
     <div class="container-tombol" id="containerTombol"></div>
 
     <!-- Mode 2: Container Kuis Acak (Pinyin Disembunyikan) -->
@@ -402,6 +434,12 @@
         <button class="btn-sekunder" onclick="tampilkanPetunjukKuis()">👁️ Lihat Pinyin & Arti</button>
         <button class="btn-sekunder btn-lanjut" onclick="soalKuisBerikutnya()">⏭️ Karakter Acak Lain</button>
       </div>
+    </div>
+
+    <!-- LAYER BARU (Floating Overlay) untuk Status & Hasil Penilaian -->
+    <div id="layerPenilaian" class="layer-penilaian">
+      <div id="statusTeks" class="status-teks"></div>
+      <button class="btn-tutup-layer" onclick="tutupLayerPenilaian()" title="Tutup">✕</button>
     </div>
 
     <!-- Elemen Audio Angka Dasar -->
@@ -450,16 +488,16 @@
 
       const containerTombol = document.getElementById('containerTombol');
       const containerKuis = document.getElementById('containerKuis');
-      const panelStatus = document.getElementById('panelStatus');
+      const layerPenilaian = document.getElementById('layerPenilaian');
       const statusTeks = document.getElementById('statusTeks');
       const btnIzinMic = document.getElementById('btnIzinMic');
 
-      let modeAktif = 'bebas'; // 'bebas' atau 'kuis'
+      let modeAktif = 'bebas';
       let indeksKuisSaatIni = 0;
       let skorBenar = 0;
       let totalPercobaan = 0;
+      let timerSembunyiLayer = null;
 
-      // Setup Web Speech API
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       let recognition = null;
       let sedangMenekan = false;
@@ -468,7 +506,6 @@
       let timerStop = null;
       let sudahDinilai = false;
 
-      // Cek izin mikrofon otomatis
       if (navigator.permissions && navigator.permissions.query) {
         navigator.permissions.query({ name: 'microphone' }).then(function(permissionStatus) {
           if (permissionStatus.state === 'granted') {
@@ -477,14 +514,13 @@
         }).catch(() => {});
       }
 
-      // Pemicu Izin Mikrofon via SpeechRecognition
       function mintaIzinMikrofon() {
         if (!SpeechRecognition) {
-          updatePanel('status-gagal', '⚠️ Browser tidak mendukung pengenalan suara. Gunakan Google Chrome atau Microsoft Edge.');
+          tampilkanLayer('status-gagal', '⚠️ Browser tidak mendukung pengenalan suara. Gunakan Google Chrome atau Microsoft Edge.');
           return;
         }
 
-        updatePanel('status-mendengarkan', '⏳ Meminta izin mikrofon ke browser... Klik <strong>Allow / Izinkan</strong> pada pop-up.');
+        tampilkanLayer('status-mendengarkan', '⏳ Meminta izin mikrofon ke browser... Klik <strong>Allow / Izinkan</strong> pada pop-up.', false);
 
         const pancingIzin = new SpeechRecognition();
         pancingIzin.lang = 'zh-CN';
@@ -492,23 +528,23 @@
         pancingIzin.onstart = function() {
           try { pancingIzin.abort(); } catch (e) {}
           btnIzinMic.style.display = 'none';
-          updatePanel('status-sukses', '✅ Mikrofon aktif! Sekarang <strong>tekan & tahan tombol mikrofon</strong> sambil berbicara.');
+          tampilkanLayer('status-sukses', '✅ Mikrofon aktif! Sekarang <strong>tekan & tahan tombol mikrofon</strong> sambil berbicara.');
         };
 
         pancingIzin.onerror = function(event) {
           if (event.error === 'aborted') return;
           if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-            updatePanel('status-gagal', '❌ Akses mikrofon ditolak. Klik ikon gembok/pengaturan di sebelah URL browser → izinkan Mikrofon.');
+            tampilkanLayer('status-gagal', '❌ Akses mikrofon ditolak. Klik ikon gembok/pengaturan di sebelah URL browser → izinkan Mikrofon.', false);
           } else {
             btnIzinMic.style.display = 'none';
-            updatePanel('status-sukses', '✅ Mikrofon siap digunakan!');
+            tampilkanLayer('status-sukses', '✅ Mikrofon siap digunakan!');
           }
         };
 
         try {
           pancingIzin.start();
         } catch (e) {
-          updatePanel('status-gagal', '⚠️ Gagal memulai mikrofon: ' + e.message);
+          tampilkanLayer('status-gagal', '⚠️ Gagal memulai mikrofon: ' + e.message);
         }
       }
 
@@ -536,7 +572,6 @@
         pasangEventPushToTalk(btnMic, () => index);
       });
 
-      // Pasang event Push-to-Talk ke tombol mikrofon pada Mode Kuis Acak
       const btnMicKuis = document.getElementById('btnMicKuis');
       pasangEventPushToTalk(btnMicKuis, () => indeksKuisSaatIni);
 
@@ -550,16 +585,15 @@
         elemenTombol.addEventListener('pointercancel', () => berhentiDanNilai());
       }
 
-      // Ganti Mode: 'bebas' atau 'kuis'
       function gantiMode(modeBaru) {
         modeAktif = modeBaru;
         document.getElementById('tabBebas').classList.toggle('aktif', modeBaru === 'bebas');
         document.getElementById('tabKuis').classList.toggle('aktif', modeBaru === 'kuis');
+        tutupLayerPenilaian();
 
         if (modeBaru === 'bebas') {
           containerTombol.style.display = 'flex';
           containerKuis.style.display = 'none';
-          updatePanel('panel-status', 'Klik karakter untuk mendengar contoh, lalu <strong>tekan & tahan 🎤 Tahan</strong> sambil berbicara.');
         } else {
           containerTombol.style.display = 'none';
           containerKuis.style.display = 'block';
@@ -578,7 +612,6 @@
 
         document.getElementById('kuisHanzi').innerText = item.hanzi;
         document.getElementById('kuisPetunjuk').innerHTML = '<em>(Pinyin disembunyikan)</em>';
-        updatePanel('panel-status', `🎲 <strong>Mode Kuis:</strong> Tekan & tahan tombol biru di bawah, lalu ucapkan karakter <strong>${item.hanzi}</strong>.`);
       }
 
       function tampilkanPetunjukKuis() {
@@ -629,9 +662,10 @@
               ? `<strong>${item.hanzi}</strong>`
               : `<strong>${item.hanzi}</strong> (<em>${item.pinyin}</em>)`;
 
-            updatePanel(
+            tampilkanLayer(
               'status-mendengarkan',
-              `🎙️ Mendengar: <strong>"${daftarHasilSuara[0]}"</strong> — Lepas tombol untuk menilai ${infoTarget}`
+              `🎙️ Mendengar: <strong>"${daftarHasilSuara[0]}"</strong> — Lepas tombol untuk menilai ${infoTarget}`,
+              false
             );
           }
 
@@ -654,7 +688,7 @@
           } else if (event.error === 'network') {
             pesanError = 'Koneksi internet diperlukan oleh browser untuk mengenali suara.';
           }
-          updatePanel('status-gagal', `⚠️ ${pesanError}`);
+          tampilkanLayer('status-gagal', `⚠️ ${pesanError}`);
         };
 
         recognition.onend = function() {
@@ -667,7 +701,7 @@
 
       function mulaiMendengarkan(index, elemenTombol) {
         if (!recognition) {
-          updatePanel('status-gagal', '⚠️ Browser tidak mendukung pengenalan suara. Gunakan Google Chrome atau Edge.');
+          tampilkanLayer('status-gagal', '⚠️ Browser tidak mendukung pengenalan suara. Gunakan Google Chrome atau Edge.');
           return;
         }
 
@@ -689,11 +723,10 @@
         elemenTombol.classList.add('aktif');
         elemenTombol.innerText = '🔴 Bicara...';
 
-        // Sembunyikan pinyin di instruksi jika sedang dalam mode kuis
         if (modeAktif === 'kuis') {
-          updatePanel('status-mendengarkan', `🎙️ Tahan tombol & ucapkan karakter <strong>"${item.hanzi}"</strong>...`);
+          tampilkanLayer('status-mendengarkan', `🎙️ Tahan tombol & ucapkan karakter <strong>"${item.hanzi}"</strong>...`, false);
         } else {
-          updatePanel('status-mendengarkan', `🎙️ Tahan tombol & ucapkan <strong>"${item.hanzi}"</strong> (<em>${item.pinyin}</em>)...`);
+          tampilkanLayer('status-mendengarkan', `🎙️ Tahan tombol & ucapkan <strong>"${item.hanzi}"</strong> (<em>${item.pinyin}</em>)...`, false);
         }
 
         setTimeout(() => {
@@ -714,7 +747,7 @@
 
         if (indeksTarget !== null) {
           const item = dataAngka[indeksTarget];
-          updatePanel('status-mendengarkan', `⏳ Memeriksa pelafalan <strong>${item.hanzi}</strong>...`);
+          tampilkanLayer('status-mendengarkan', `⏳ Memeriksa pelafalan <strong>${item.hanzi}</strong>...`, false);
         }
 
         timerStop = setTimeout(() => {
@@ -743,7 +776,7 @@
         document.getElementById('totalPercobaan').innerText = totalPercobaan;
 
         if (daftarHasilSuara.length === 0) {
-          updatePanel(
+          tampilkanLayer(
             'status-gagal',
             `❌ <strong>Kurang tepat</strong> (suara tidak terdeteksi). Tahan tombol lebih mantap saat mengucapkan <strong>${item.hanzi}</strong>.`
           );
@@ -759,30 +792,28 @@
           skorBenar++;
           document.getElementById('skorBenar').innerText = skorBenar;
 
-          // Tandai kartu sebagai lulus di mode latihan bebas
           const kartuLulus = document.getElementById(`kartu-${indeksDievaluasi}`);
           if (kartuLulus) kartuLulus.classList.add('lulus');
 
-          // Jika di mode kuis, buka jawaban pinyin & lanjutkan otomatis setelah 1.6 detik
           if (modeAktif === 'kuis') {
             document.getElementById('kuisPetunjuk').innerHTML = `✅ Pinyin: <strong>${item.pinyin}</strong> (${item.arti})`;
-            updatePanel(
+            tampilkanLayer(
               'status-sukses',
-              `✅ <strong>Sudah tepat!</strong> Pelafalan <strong>${item.hanzi}</strong> (<em>${item.pinyin}</em>) benar. (Terdengar: "${ucapanUtama}") — Memuat soal berikutnya...`
+              `✅ <strong>Sudah tepat!</strong> Pelafalan <strong>${item.hanzi}</strong> (<em>${item.pinyin}</em>) benar. (Terdengar: "${ucapanUtama}")`
             );
             setTimeout(() => {
               if (modeAktif === 'kuis') soalKuisBerikutnya();
             }, 1800);
           } else {
-            updatePanel(
+            tampilkanLayer(
               'status-sukses',
               `✅ <strong>Sudah tepat!</strong> Pelafalan <strong>${item.hanzi}</strong> (<em>${item.pinyin}</em>) benar. (Terdengar: "${ucapanUtama}")`
             );
           }
         } else {
-          updatePanel(
+          tampilkanLayer(
             'status-gagal',
-            `❌ <strong>Kurang tepat.</strong> Target: <strong>${item.hanzi}</strong>${modeAktif === 'bebas' ? ` (<em>${item.pinyin}</em>)` : ''}, terdengar: <strong>"${ucapanUtama}"</strong>. Coba lagi!`
+            `❌ <strong>Kurang tepat.</strong> Target: <strong>${item.hanzi}</strong>${modeAktif === 'bebas' ? ` (<em>${item.pinyin}</em>)` : ''}, terdengar: <strong>"${ucapanUtama}"</strong>.`
           );
         }
       }
@@ -798,9 +829,25 @@
         });
       }
 
-      function updatePanel(kelasStatus, htmlPesan) {
-        panelStatus.className = 'panel-status ' + kelasStatus;
+      // Kontrol Layer Mengambang (Floating Overlay)
+      function tampilkanLayer(kelasStatus, htmlPesan, sembunyiOtomatis = true) {
+        if (timerSembunyiLayer) {
+          clearTimeout(timerSembunyiLayer);
+          timerSembunyiLayer = null;
+        }
+
+        layerPenilaian.className = 'layer-penilaian tampil ' + kelasStatus;
         statusTeks.innerHTML = htmlPesan;
+
+        if (sembunyiOtomatis) {
+          timerSembunyiLayer = setTimeout(() => {
+            tutupLayerPenilaian();
+          }, 4000);
+        }
+      }
+
+      function tutupLayerPenilaian() {
+        layerPenilaian.classList.remove('tampil');
       }
     </script>
   </body>
