@@ -10,7 +10,7 @@
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         background-color: #f4f6f9;
         margin: 0;
-        padding: 20px 20px 120px 20px; /* Ruang ekstra di bawah untuk layer penilaian */
+        padding: 20px 20px 120px 20px;
       }
 
       /* Navigasi Mode & Skor */
@@ -84,10 +84,7 @@
         background-color: #0056b3;
       }
 
-      /* =======================================================
-         LAYER BARU (FLOATING OVERLAY) UNTUK PENILAIAN PELAFALAN
-         Menggunakan position: fixed agar tidak menggeser tombol
-         ======================================================= */
+      /* Layer Mengambang (Floating Overlay) Penilaian */
       .layer-penilaian {
         position: fixed;
         bottom: 24px;
@@ -154,7 +151,7 @@
         background-color: #eef6ff;
       }
 
-      /* Area Latihan Bebas (Grid Kartu) */
+      /* Area Latihan Bebas */
       .container-tombol {
         display: flex;
         flex-direction: row;
@@ -227,7 +224,7 @@
         transform: scale(0.95);
       }
 
-      /* Tombol Mikrofon Push-to-Talk */
+      /* Tombol Mikrofon */
       .btn-mic {
         width: 90px;
         padding: 7px 0;
@@ -246,6 +243,12 @@
 
       .btn-mic:hover {
         background-color: #e2e6ea;
+      }
+
+      .btn-mic.menyiapkan {
+        background-color: #ffc107;
+        color: #212529;
+        border-color: #ffc107;
       }
 
       .btn-mic.aktif {
@@ -312,8 +315,14 @@
         background-color: #0056b3;
       }
 
+      .btn-mic-kuis.menyiapkan {
+        background-color: #ffc107;
+        color: #212529;
+      }
+
       .btn-mic-kuis.aktif {
         background-color: #dc3545;
+        color: #ffffff;
       }
 
       .aksi-kuis {
@@ -417,10 +426,10 @@
       </div>
     </div>
 
-    <!-- Mode 1: Container Tombol Latihan Bebas (Posisi Statis) -->
+    <!-- Mode 1: Container Tombol Latihan Bebas -->
     <div class="container-tombol" id="containerTombol"></div>
 
-    <!-- Mode 2: Container Kuis Acak (Pinyin Disembunyikan) -->
+    <!-- Mode 2: Container Kuis Acak -->
     <div class="container-kuis" id="containerKuis">
       <div class="label-kuis">Lafalkan Karakter Berikut Tanpa Pinyin</div>
       <div class="karakter-kuis" id="kuisHanzi">一</div>
@@ -436,7 +445,7 @@
       </div>
     </div>
 
-    <!-- LAYER BARU (Floating Overlay) untuk Status & Hasil Penilaian -->
+    <!-- Layer Mengambang untuk Status & Hasil Penilaian -->
     <div id="layerPenilaian" class="layer-penilaian">
       <div id="statusTeks" class="status-teks"></div>
       <button class="btn-tutup-layer" onclick="tutupLayerPenilaian()" title="Tutup">✕</button>
@@ -505,6 +514,7 @@
       let daftarHasilSuara = [];
       let timerStop = null;
       let sudahDinilai = false;
+      let tombolSedangAktif = null;
 
       if (navigator.permissions && navigator.permissions.query) {
         navigator.permissions.query({ name: 'microphone' }).then(function(permissionStatus) {
@@ -528,7 +538,7 @@
         pancingIzin.onstart = function() {
           try { pancingIzin.abort(); } catch (e) {}
           btnIzinMic.style.display = 'none';
-          tampilkanLayer('status-sukses', '✅ Mikrofon aktif! Sekarang <strong>tekan & tahan tombol mikrofon</strong> sambil berbicara.');
+          tampilkanLayer('status-sukses', '✅ Mikrofon aktif! Tahan tombol hingga berubah merah, lalu ucapkan 1x dengan jelas.');
         };
 
         pancingIzin.onerror = function(event) {
@@ -638,15 +648,33 @@
         }
       }
 
+      // Inisialisasi 1 objek SpeechRecognition untuk kata tunggal (continuous = false)
       if (SpeechRecognition) {
         recognition = new SpeechRecognition();
         recognition.lang = 'zh-CN';
         recognition.interimResults = true;
-        recognition.continuous = true;
+        recognition.continuous = false; // Langsung memfinalisasi 1x ucapan kata pendek
         recognition.maxAlternatives = 5;
 
+        // Dipicu tepat saat hardware mikrofon benar-benar siap menangkap suara
+        recognition.onaudiostart = function() {
+          if (!sedangMenekan || indeksTarget === null) return;
+          const item = dataAngka[indeksTarget];
+
+          if (tombolSedangAktif) {
+            tombolSedangAktif.classList.remove('menyiapkan');
+            tombolSedangAktif.classList.add('aktif');
+            tombolSedangAktif.innerText = '🔴 Ucapkan!';
+          }
+
+          if (modeAktif === 'kuis') {
+            tampilkanLayer('status-mendengarkan', `🔴 <strong>Silakan ucapkan 1x sekarang:</strong> <strong>"${item.hanzi}"</strong>`, false);
+          } else {
+            tampilkanLayer('status-mendengarkan', `🔴 <strong>Silakan ucapkan 1x sekarang:</strong> <strong>"${item.hanzi}"</strong> (<em>${item.pinyin}</em>)`, false);
+          }
+        };
+
         recognition.onresult = function(event) {
-          daftarHasilSuara = [];
           for (let i = 0; i < event.results.length; i++) {
             for (let j = 0; j < event.results[i].length; j++) {
               const teks = event.results[i][j].transcript.trim();
@@ -656,21 +684,14 @@
             }
           }
 
-          if (sedangMenekan && indeksTarget !== null && daftarHasilSuara.length > 0) {
-            const item = dataAngka[indeksTarget];
-            const infoTarget = modeAktif === 'kuis'
-              ? `<strong>${item.hanzi}</strong>`
-              : `<strong>${item.hanzi}</strong> (<em>${item.pinyin}</em>)`;
-
-            tampilkanLayer(
-              'status-mendengarkan',
-              `🎙️ Mendengar: <strong>"${daftarHasilSuara[0]}"</strong> — Lepas tombol untuk menilai ${infoTarget}`,
-              false
-            );
-          }
-
-          if (!sedangMenekan && indeksTarget !== null && !sudahDinilai && daftarHasilSuara.length > 0) {
-            prosesPenilaianAkhir();
+          // Begitu 1 ucapan sudah tertangkap, langsung nilai seketika tanpa menunggu lama
+          if (daftarHasilSuara.length > 0 && indeksTarget !== null && !sudahDinilai) {
+            const hasilFinal = event.results[event.results.length - 1].isFinal;
+            if (hasilFinal || !sedangMenekan) {
+              sedangMenekan = false;
+              resetTampilanTombol();
+              prosesPenilaianAkhir();
+            }
           }
         };
 
@@ -681,7 +702,7 @@
 
           let pesanError = 'Gagal memproses suara (' + event.error + ').';
           if (event.error === 'no-speech') {
-            pesanError = 'Tidak ada suara terdengar. Tahan tombol 1 detik sebelum dan sesudah berbicara.';
+            pesanError = 'Suara belum masuk. Tunggu tombol berwarna <strong>merah (🔴 Ucapkan!)</strong> baru berbicara.';
           } else if (event.error === 'not-allowed') {
             btnIzinMic.style.display = 'inline-block';
             pesanError = 'Izin mikrofon belum aktif. Klik <strong>🔓 Aktifkan Mikrofon</strong> di atas.';
@@ -693,6 +714,7 @@
 
         recognition.onend = function() {
           resetTampilanTombol();
+          sedangMenekan = false;
           if (indeksTarget !== null && !sudahDinilai) {
             prosesPenilaianAkhir();
           }
@@ -712,32 +734,29 @@
           timerStop = null;
         }
 
-        try { recognition.abort(); } catch (e) {}
-
         sedangMenekan = true;
         indeksTarget = index;
         daftarHasilSuara = [];
         sudahDinilai = false;
+        tombolSedangAktif = elemenTombol;
 
-        const item = dataAngka[index];
-        elemenTombol.classList.add('aktif');
-        elemenTombol.innerText = '🔴 Bicara...';
+        // Status kuning sesaat selama hardware mikrofon menyala (biasanya ~0.2 detik)
+        elemenTombol.classList.add('menyiapkan');
+        elemenTombol.innerText = '🟡 Siap...';
+        tampilkanLayer('status-mendengarkan', '🟡 Menyalakan mikrofon...', false);
 
-        if (modeAktif === 'kuis') {
-          tampilkanLayer('status-mendengarkan', `🎙️ Tahan tombol & ucapkan karakter <strong>"${item.hanzi}"</strong>...`, false);
-        } else {
-          tampilkanLayer('status-mendengarkan', `🎙️ Tahan tombol & ucapkan <strong>"${item.hanzi}"</strong> (<em>${item.pinyin}</em>)...`, false);
-        }
-
-        setTimeout(() => {
-          if (sedangMenekan) {
-            try {
-              recognition.start();
-            } catch (e) {
-              console.log('Start error:', e);
+        // Jalankan langsung tanpa jeda setTimeout agar tidak ada delay tambahan
+        try {
+          recognition.start();
+        } catch (e) {
+          // Jika sesi sebelumnya belum sepenuhnya tertutup, reset lalu start ulang
+          try { recognition.abort(); } catch (err) {}
+          setTimeout(() => {
+            if (sedangMenekan) {
+              try { recognition.start(); } catch (err2) {}
             }
-          }
-        }, 100);
+          }, 50);
+        }
       }
 
       function berhentiDanNilai() {
@@ -745,11 +764,12 @@
         sedangMenekan = false;
         resetTampilanTombol();
 
-        if (indeksTarget !== null) {
+        if (indeksTarget !== null && !sudahDinilai) {
           const item = dataAngka[indeksTarget];
           tampilkanLayer('status-mendengarkan', `⏳ Memeriksa pelafalan <strong>${item.hanzi}</strong>...`, false);
         }
 
+        // Beri jeda singkat 300ms agar sisa akhir kata tidak terpotong saat tombol dilepas
         timerStop = setTimeout(() => {
           if (recognition) {
             try {
@@ -760,8 +780,8 @@
             if (indeksTarget !== null && !sudahDinilai) {
               prosesPenilaianAkhir();
             }
-          }, 600);
-        }, 450);
+          }, 400);
+        }, 300);
       }
 
       function prosesPenilaianAkhir() {
@@ -778,7 +798,7 @@
         if (daftarHasilSuara.length === 0) {
           tampilkanLayer(
             'status-gagal',
-            `❌ <strong>Kurang tepat</strong> (suara tidak terdeteksi). Tahan tombol lebih mantap saat mengucapkan <strong>${item.hanzi}</strong>.`
+            `❌ <strong>Kurang tepat</strong> (suara tidak terdeteksi). Tunggu tombol menjadi <strong>merah</strong> baru ucapkan <strong>${item.hanzi}</strong>.`
           );
           return;
         }
@@ -819,8 +839,9 @@
       }
 
       function resetTampilanTombol() {
+        tombolSedangAktif = null;
         document.querySelectorAll('.btn-mic').forEach(btn => {
-          btn.classList.remove('aktif');
+          btn.classList.remove('aktif', 'menyiapkan');
           if (btn.id === 'btnMicKuis') {
             btn.innerText = '🎤 Tahan & Lafalkan';
           } else {
@@ -829,7 +850,6 @@
         });
       }
 
-      // Kontrol Layer Mengambang (Floating Overlay)
       function tampilkanLayer(kelasStatus, htmlPesan, sembunyiOtomatis = true) {
         if (timerSembunyiLayer) {
           clearTimeout(timerSembunyiLayer);
