@@ -10,7 +10,7 @@
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         background-color: #f4f6f9;
         margin: 0;
-        padding: 20px 20px 130px 20px;
+        padding: 20px 20px 140px 20px;
       }
 
       /* Navigasi Mode & Skor */
@@ -84,7 +84,7 @@
         background-color: #0056b3;
       }
 
-      /* Layer Mengambang (Floating Overlay) Penilaian */
+      /* Layer Mengambang (Floating Overlay) Penilaian + Hitung Mundur */
       .layer-penilaian {
         position: fixed;
         bottom: 24px;
@@ -98,12 +98,12 @@
         border-radius: 12px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
+        flex-direction: column;
+        gap: 10px;
         z-index: 9999;
         opacity: 0;
         pointer-events: none;
+        overflow: hidden;
         transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
       }
 
@@ -113,11 +113,51 @@
         pointer-events: auto;
       }
 
+      .baris-atas-layer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        width: 100%;
+      }
+
       .status-teks {
         font-size: 15px;
         color: #222;
         flex: 1;
         line-height: 1.45;
+      }
+
+      .badge-timer {
+        background-color: #007bff;
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 14px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        white-space: nowrap;
+        display: none;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .badge-timer.kritis {
+        background-color: #dc3545;
+      }
+
+      .wadah-progress {
+        width: 100%;
+        height: 5px;
+        background-color: rgba(0, 123, 255, 0.15);
+        border-radius: 4px;
+        overflow: hidden;
+        display: none;
+      }
+
+      .isi-progress {
+        height: 100%;
+        width: 100%;
+        background-color: #007bff;
+        transition: width 0.1s linear, background-color 0.2s;
       }
 
       .btn-tutup-layer {
@@ -224,7 +264,7 @@
         transform: scale(0.95);
       }
 
-      /* Tombol Mikrofon Klik 1x */
+      /* Tombol Mikrofon */
       .btn-mic {
         width: 90px;
         padding: 7px 0;
@@ -236,6 +276,7 @@
         font-weight: 600;
         cursor: pointer;
         transition: all 0.15s;
+        font-variant-numeric: tabular-nums;
       }
 
       .btn-mic:hover {
@@ -436,10 +477,16 @@
       </div>
     </div>
 
-    <!-- Layer Mengambang untuk Status & Hasil Penilaian -->
+    <!-- Layer Mengambang untuk Status, Hitung Mundur & Hasil Penilaian -->
     <div id="layerPenilaian" class="layer-penilaian">
-      <div id="statusTeks" class="status-teks"></div>
-      <button class="btn-tutup-layer" onclick="tutupLayerPenilaian()" title="Tutup">✕</button>
+      <div class="baris-atas-layer">
+        <div id="statusTeks" class="status-teks"></div>
+        <div id="badgeTimer" class="badge-timer">⏱️ 5.0s</div>
+        <button class="btn-tutup-layer" onclick="batalkanDanTutupLayer()" title="Tutup">✕</button>
+      </div>
+      <div id="wadahProgress" class="wadah-progress">
+        <div id="isiProgress" class="isi-progress"></div>
+      </div>
     </div>
 
     <!-- Elemen Audio Angka Dasar -->
@@ -465,7 +512,6 @@
     <audio id="audio_yi_hundred_million"><source src="https://cdn.jsdelivr.net/gh/vivijap28/audio-angka@main/%E4%BA%BF.mp3" type="audio/mpeg"></audio>
 
     <script>
-      // Daftar fonetik & homofon yang diperluas agar kata tunggal akurat tertangkap
       const dataAngka = [
         { hanzi: '零', pinyin: 'líng', arti: 'Nol (0)', audioId: 'audio0', cocok: ['零', '0', '林', '灵', '铃', '领', '令', '另', '玲', '凌'] },
         { hanzi: '一', pinyin: 'yī', arti: 'Satu (1)', audioId: 'audio1', cocok: ['一', '1', '医', '衣', '依', '以', '已', '意', '亿', '易', '移', '姨', '宜', '疑', '仪'] },
@@ -487,10 +533,15 @@
         { hanzi: '亿', pinyin: 'yì', arti: 'Ratus Juta (100.000.000)', audioId: 'audio_yi_hundred_million', cocok: ['亿', '一亿', '1亿', '意', '易', '义', '一', '艺', '议', '异', '益', '以'] }
       ];
 
+      const DURASI_MIC_DETIK = 5;
+
       const containerTombol = document.getElementById('containerTombol');
       const containerKuis = document.getElementById('containerKuis');
       const layerPenilaian = document.getElementById('layerPenilaian');
       const statusTeks = document.getElementById('statusTeks');
+      const badgeTimer = document.getElementById('badgeTimer');
+      const wadahProgress = document.getElementById('wadahProgress');
+      const isiProgress = document.getElementById('isiProgress');
       const btnIzinMic = document.getElementById('btnIzinMic');
 
       let modeAktif = 'bebas';
@@ -498,10 +549,20 @@
       let skorBenar = 0;
       let totalPercobaan = 0;
       let timerSembunyiLayer = null;
+      let intervalHitungMundur = null;
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       let sedangMendengarkan = false;
       let recognitionAktif = null;
+
+      // Cek apakah halaman dibuka lewat file:/// yang pasti memblokir mikrofon
+      if (window.location.protocol === 'file:') {
+        tampilkanLayer(
+          'status-gagal',
+          '⚠️ Halaman dibuka langsung dari file komputer (<code>file:///</code>). Browser memblokir mikrofon pada protokol ini. Gunakan <strong>GitHub Pages (HTTPS)</strong> atau <strong>Live Server</strong>.',
+          false
+        );
+      }
 
       if (navigator.permissions && navigator.permissions.query) {
         navigator.permissions.query({ name: 'microphone' }).then(function(permissionStatus) {
@@ -511,37 +572,30 @@
         }).catch(() => {});
       }
 
-      function mintaIzinMikrofon() {
-        if (!SpeechRecognition) {
-          tampilkanLayer('status-gagal', '⚠️ Browser tidak mendukung pengenalan suara. Gunakan Google Chrome atau Microsoft Edge.');
+      // Perbaikan: Minta izin via getUserMedia lalu tutup track dengan bersih tanpa abort() SpeechRecognition
+      async function mintaIzinMikrofon() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          tampilkanLayer(
+            'status-gagal',
+            '❌ Browser memblokir mikrofon karena halaman berjalan di protokol tidak aman atau di dalam <code>&lt;iframe&gt;</code> Google Sites. Buka link langsung di tab browser.',
+            false
+          );
           return;
         }
 
-        tampilkanLayer('status-mendengarkan', '⏳ Meminta izin mikrofon ke browser... Klik <strong>Allow / Izinkan</strong> pada pop-up.', false);
-
-        const pancingIzin = new SpeechRecognition();
-        pancingIzin.lang = 'zh-CN';
-
-        pancingIzin.onstart = function() {
-          try { pancingIzin.abort(); } catch (e) {}
-          btnIzinMic.style.display = 'none';
-          tampilkanLayer('status-sukses', '✅ Mikrofon aktif! Klik tombol <strong>🎤 Tes</strong> 1x lalu ucapkan karakternya.');
-        };
-
-        pancingIzin.onerror = function(event) {
-          if (event.error === 'aborted') return;
-          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-            tampilkanLayer('status-gagal', '❌ Akses mikrofon ditolak. Klik ikon gembok/pengaturan di sebelah URL browser → izinkan Mikrofon.', false);
-          } else {
-            btnIzinMic.style.display = 'none';
-            tampilkanLayer('status-sukses', '✅ Mikrofon siap digunakan!');
-          }
-        };
+        tampilkanLayer('status-mendengarkan', '⏳ Meminta izin mikrofon... Klik <strong>Allow / Izinkan</strong> pada pop-up browser.', false);
 
         try {
-          pancingIzin.start();
-        } catch (e) {
-          tampilkanLayer('status-gagal', '⚠️ Gagal memulai mikrofon: ' + e.message);
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+          btnIzinMic.style.display = 'none';
+          tampilkanLayer('status-sukses', '✅ Mikrofon berhasil diaktifkan! Sekarang klik tombol <strong>🎤 Tes</strong> untuk mulai.');
+        } catch (err) {
+          tampilkanLayer(
+            'status-gagal',
+            `❌ Mikrofon gagal dinyalakan (<code>${err.name}</code>). Pastikan izin mikrofon di browser diset ke <strong>Allow</strong> dan halaman tidak di-embed di Google Sites.`,
+            false
+          );
         }
       }
 
@@ -570,7 +624,7 @@
         modeAktif = modeBaru;
         document.getElementById('tabBebas').classList.toggle('aktif', modeBaru === 'bebas');
         document.getElementById('tabKuis').classList.toggle('aktif', modeBaru === 'kuis');
-        tutupLayerPenilaian();
+        batalkanDanTutupLayer();
 
         if (modeBaru === 'bebas') {
           containerTombol.style.display = 'flex';
@@ -619,52 +673,124 @@
         }
       }
 
-      // Fungsi Utama: Klik 1x untuk mendengarkan otomatis (Auto-Stop saat selesai bicara)
+      function mulaiHitungMundur(elemenTombol, onWaktuHabis) {
+        hentikanHitungMundur();
+
+        const totalMs = DURASI_MIC_DETIK * 1000;
+        const waktuMulai = Date.now();
+
+        badgeTimer.style.display = 'inline-block';
+        badgeTimer.classList.remove('kritis');
+        badgeTimer.innerText = `⏱️ ${DURASI_MIC_DETIK.toFixed(1)}s`;
+
+        wadahProgress.style.display = 'block';
+        isiProgress.style.width = '100%';
+        isiProgress.style.backgroundColor = '#007bff';
+
+        intervalHitungMundur = setInterval(() => {
+          const berlalu = Date.now() - waktuMulai;
+          const sisaMs = Math.max(0, totalMs - berlalu);
+          const sisaDetik = (sisaMs / 1000).toFixed(1);
+          const persen = (sisaMs / totalMs) * 100;
+
+          badgeTimer.innerText = `⏱️ ${sisaDetik}s`;
+          isiProgress.style.width = `${persen}%`;
+
+          if (elemenTombol.id === 'btnMicKuis') {
+            elemenTombol.innerText = `🔴 Bicara (${Math.ceil(sisaMs / 1000)}s)...`;
+          } else {
+            elemenTombol.innerText = `🔴 ${Math.ceil(sisaMs / 1000)}s`;
+          }
+
+          if (sisaMs <= 1500) {
+            badgeTimer.classList.add('kritis');
+            isiProgress.style.backgroundColor = '#dc3545';
+          }
+
+          if (sisaMs <= 0) {
+            hentikanHitungMundur();
+            onWaktuHabis();
+          }
+        }, 100);
+      }
+
+      function hentikanHitungMundur() {
+        if (intervalHitungMundur) {
+          clearInterval(intervalHitungMundur);
+          intervalHitungMundur = null;
+        }
+        badgeTimer.style.display = 'none';
+        badgeTimer.classList.remove('kritis');
+        wadahProgress.style.display = 'none';
+      }
+
       function mulaiTes(index, elemenTombol) {
         if (!SpeechRecognition) {
-          tampilkanLayer('status-gagal', '⚠️ Browser tidak mendukung pengenalan suara. Gunakan Google Chrome atau Edge.');
+          tampilkanLayer('status-gagal', '⚠️ Browser ini tidak mendukung Web Speech API. Gunakan Google Chrome atau Microsoft Edge.');
           return;
         }
 
-        // Jika tombol yang sama diklik saat sedang mendengarkan, batalkan sesi
-        if (sedangMendengarkan && recognitionAktif) {
-          try { recognitionAktif.abort(); } catch (e) {}
+        // Hentikan sesi lama jika pengguna mengklik tombol lain
+        if (recognitionAktif) {
+          try { recognitionAktif.stop(); } catch (e) {}
+          recognitionAktif = null;
+          hentikanHitungMundur();
           resetTampilanTombol();
-          sedangMendengarkan = false;
-          tutupLayerPenilaian();
-          return;
+          if (sedangMendengarkan) {
+            sedangMendengarkan = false;
+            tutupLayerPenilaian();
+            return;
+          }
         }
 
         const item = dataAngka[index];
         sedangMendengarkan = true;
-        resetTampilanTombol();
+        elemenTombol.innerText = '⏳ ...';
+        tampilkanLayer('status-mendengarkan', '⏳ Menyalakan mikrofon...', false);
 
-        elemenTombol.classList.add('aktif');
-        elemenTombol.innerText = '🔴 Bicara...';
-
-        if (modeAktif === 'kuis') {
-          tampilkanLayer('status-mendengarkan', `🎙️ Silakan ucapkan <strong>"${item.hanzi}"</strong> dengan jelas...`, false);
-        } else {
-          tampilkanLayer('status-mendengarkan', `🎙️ Silakan ucapkan <strong>"${item.hanzi}"</strong> (<em>${item.pinyin}</em>) dengan jelas...`, false);
-        }
-
-        // Buat instance baru setiap kali tes dimulai agar tidak ada sisa state sesi sebelumnya
         const rec = new SpeechRecognition();
         recognitionAktif = rec;
         rec.lang = 'zh-CN';
-        rec.interimResults = false; // Tunggu hasil terbaik yang sudah difinalisasi oleh server suara
-        rec.continuous = false;     // Otomatis berhenti begitu pengguna selesai mengucapkan 1 kata
-        rec.maxAlternatives = 10;   // Ambil hingga 10 alternatif karakter homofon terbaik
+        rec.interimResults = false;
+        rec.continuous = false;
+        rec.maxAlternatives = 10;
 
         let hasilSudahDiproses = false;
+
+        // Timer & indikator merah HANYA menyala setelah mikrofon benar-benar aktif
+        rec.onstart = function() {
+          if (hasilSudahDiproses) return;
+          elemenTombol.classList.add('aktif');
+          elemenTombol.innerText = `🔴 ${DURASI_MIC_DETIK}s`;
+
+          if (modeAktif === 'kuis') {
+            tampilkanLayer('status-mendengarkan', `🎙️ Silakan ucapkan <strong>"${item.hanzi}"</strong> sekarang...`, false);
+          } else {
+            tampilkanLayer('status-mendengarkan', `🎙️ Silakan ucapkan <strong>"${item.hanzi}"</strong> (<em>${item.pinyin}</em>) sekarang...`, false);
+          }
+
+          mulaiHitungMundur(elemenTombol, () => {
+            if (!hasilSudahDiproses) {
+              hasilSudahDiproses = true;
+              try { rec.stop(); } catch (e) {}
+              sedangMendengarkan = false;
+              recognitionAktif = null;
+              resetTampilanTombol();
+              tampilkanLayer(
+                'status-gagal',
+                `⌛ <strong>Waktu habis (${DURASI_MIC_DETIK} detik).</strong> Suara tidak terdeteksi untuk <strong>${item.hanzi}</strong>.`
+              );
+            }
+          });
+        };
 
         rec.onresult = function(event) {
           if (hasilSudahDiproses) return;
           hasilSudahDiproses = true;
+          hentikanHitungMundur();
 
           let daftarUcapan = [];
           for (let i = 0; i < event.results[0].length; i++) {
-            // Bersihkan tanda baca (seperti titik atau koma otomatis dari browser)
             const teksBersih = event.results[0][i].transcript.replace(/[。，！？.,!?]/g, '').trim();
             if (teksBersih && !daftarUcapan.includes(teksBersih)) {
               daftarUcapan.push(teksBersih);
@@ -675,22 +801,29 @@
         };
 
         rec.onerror = function(event) {
-          if (event.error === 'aborted' || hasilSudahDiproses) return;
+          if (hasilSudahDiproses) return;
           hasilSudahDiproses = true;
+          hentikanHitungMundur();
+          sedangMendengarkan = false;
+          recognitionAktif = null;
+          resetTampilanTombol();
 
-          let pesanError = 'Terjadi gangguan pengenalan suara (' + event.error + ').';
+          let pesanError = `Mikrofon gagal menyala (kode: <code>${event.error}</code>).`;
           if (event.error === 'no-speech') {
-            pesanError = 'Suara tidak terdengar. Klik tombol <strong>🎤 Tes</strong> lalu langsung ucapkan dengan lantang.';
-          } else if (event.error === 'not-allowed') {
+            pesanError = 'Tidak ada suara terdengar oleh mikrofon. Periksa volume input mikrofon Anda.';
+          } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
             btnIzinMic.style.display = 'inline-block';
-            pesanError = 'Izin mikrofon belum aktif. Klik <strong>🔓 Aktifkan Mikrofon</strong> di atas.';
+            pesanError = 'Akses mikrofon ditolak browser. Klik <strong>🔓 Aktifkan Mikrofon</strong> atau periksa izin situs di bilah alamat URL.';
+          } else if (event.error === 'audio-capture') {
+            pesanError = 'Perangkat mikrofon tidak ditemukan atau sedang dipakai aplikasi lain (Zoom/Meet/dll).';
           } else if (event.error === 'network') {
-            pesanError = 'Koneksi internet tidak stabil untuk mengenali suara.';
+            pesanError = 'Pengenalan suara butuh koneksi internet aktif ke server browser.';
           }
-          tampilkanLayer('status-gagal', `⚠️ ${pesanError}`);
+          tampilkanLayer('status-gagal', `⚠️ ${pesanError}`, false);
         };
 
         rec.onend = function() {
+          hentikanHitungMundur();
           sedangMendengarkan = false;
           recognitionAktif = null;
           resetTampilanTombol();
@@ -699,9 +832,11 @@
         try {
           rec.start();
         } catch (e) {
+          hentikanHitungMundur();
           sedangMendengarkan = false;
+          recognitionAktif = null;
           resetTampilanTombol();
-          tampilkanLayer('status-gagal', '⚠️ Gagal memulai mikrofon: ' + e.message);
+          tampilkanLayer('status-gagal', `⚠️ Gagal menjalankan mikrofon: <code>${e.message}</code>`, false);
         }
       }
 
@@ -716,8 +851,6 @@
         }
 
         const ucapanUtama = daftarUcapan[0];
-
-        // Cek kecocokan pada seluruh 10 alternatif transkrip
         const apakahTepat = daftarUcapan.some(teks =>
           item.cocok.some(target => teks.includes(target))
         );
@@ -777,6 +910,17 @@
             tutupLayerPenilaian();
           }, 4500);
         }
+      }
+
+      function batalkanDanTutupLayer() {
+        hentikanHitungMundur();
+        if (recognitionAktif) {
+          try { recognitionAktif.stop(); } catch (e) {}
+          recognitionAktif = null;
+        }
+        sedangMendengarkan = false;
+        resetTampilanTombol();
+        tutupLayerPenilaian();
       }
 
       function tutupLayerPenilaian() {
